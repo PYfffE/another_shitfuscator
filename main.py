@@ -12,6 +12,9 @@ print()
 
 shellcode.expand_offsets()
 
+shellcode.add_prefix(['90', '90', '90'])
+shellcode.add_postfix(['90', '90', '90'])
+
 print('СТАЛО')
 print('\n'.join(shellcode.get_payload()))
 

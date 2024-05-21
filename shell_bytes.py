@@ -39,13 +39,16 @@ class ShellBytes:
     def offset_int_to_str_hex(self, int_hex: int, offset_size: int):
         if offset_size not in [8, 32]:
             raise SystemExit('offset_str_int_to_hex bruh')
+        str_hex = f'{((int_hex + (1 << offset_size)) % (1 << offset_size)):0{int(offset_size / 8) * 2}x}'
+
+        # Проверка на переполнение
+        if not (-(2 ** (offset_size - 1))) <= int_hex < (2 ** (offset_size - 1)):
+            return None
 
         if offset_size == 8:
-            str_hex = f'{((int_hex + (1 << offset_size)) % (1 << offset_size)):0{2}x}'
             return str_hex.upper()
 
         elif offset_size == 32:
-            str_hex = f'{((int_hex + (1 << offset_size)) % (1 << offset_size)):0{8}x}'
             return self.str_hex_reverse(' '.join(str_hex[i:i + 2] for i in range(0, len(str_hex), 2)).upper())
 
     def offset_str_hex_to_int(self, str_hex: str):
@@ -79,12 +82,16 @@ class ShellBytes:
         return None, None, None
 
     def _fix_offset(self, jmp_index: int, offset_of_offset: int):
-
         hex_offset, offset_size, instr_opcode = self._get_offset(self._disasm_shellcode[jmp_index])
         int_offset = self.offset_str_hex_to_int(hex_offset)
+
         offset_changes = int_offset + offset_of_offset
+        if not ((- (2 ** (offset_size - 1))) <= offset_changes < (2 ** (offset_size - 1))):
+            return None
+
         self._disasm_shellcode[jmp_index] = instr_opcode + ' ' + self.offset_int_to_str_hex(offset_changes, offset_size)
         self._shellcode_to_bytes()
+        return True
 
     def get_real_index(self, instr_index):
         real_index = 0
@@ -111,7 +118,7 @@ class ShellBytes:
                 # dest_i = start_i + int_offset
 
                 dest_i = 0
-                if instr_i == 23:
+                if instr_i == 1:
                     asd = 1
 
                 real_start_index = self.get_real_index(start_i)
@@ -120,10 +127,16 @@ class ShellBytes:
 
                 if (real_start_index <= real_changed_index < real_dest_index) or (
                         real_dest_index <= real_changed_index < real_start_index):
+                    test = True
                     if int_offset >= 0:
-                        self._fix_offset(instr_i, changed_bytes['bytes_number_difference'])
+                        test = self._fix_offset(instr_i, changed_bytes['bytes_number_difference'])
                     else:
-                        self._fix_offset(instr_i, - changed_bytes['bytes_number_difference'])
+                        test = self._fix_offset(instr_i, - changed_bytes['bytes_number_difference'])
+
+                    if test is None:
+                        print('Cannot change offset because overflow offset ' + self._disasm_shellcode[
+                            instr_i] + ' overflow with number ' + str(changed_bytes['bytes_number_difference']))
+
                     if instr_i in self.changes_buf.keys():
                         del self.changes_buf[instr_i]
 
@@ -139,7 +152,7 @@ class ShellBytes:
     def new_instruction(self, hex_str: str, after_index: int):
         self._disasm_shellcode.insert(after_index + 1, hex_str)
         self._shellcode_to_bytes()
-        self._fix_all_offsets({'bytes_number_difference': hex_str, 'index': after_index + 1})
+        self._fix_all_offsets({'bytes_number_difference': hex_str, 'index': after_index})
 
     def _get_opcode_size(self, str_hex: str):
         return len(str_hex.split(' '))
@@ -153,6 +166,8 @@ class ShellBytes:
                 if opcode == 'E2':
                     asd = 1
                 current_size = self._get_opcode_size(self._disasm_shellcode[instr_i])
+                if jmp_offset == 'F6':
+                    print(123)
                 new_instr = self.JUMPS_8_TO_32_CONVERT_OPCODES[opcode] + ' ' + self.offset_int_to_str_hex(
                     self.offset_str_hex_to_int(jmp_offset), 32)
 
@@ -166,6 +181,22 @@ class ShellBytes:
         for change_i in array_of_changes:
             self._fix_all_offsets(change_i)
         self.changes_buf = {}
+
+    # @param hex_commands: example ['90', '90', '90']
+    def add_prefix(self, hex_commands: list):
+        revert_i = len(hex_commands) - 1
+        while revert_i >= 0:
+            self._disasm_shellcode.insert(0, hex_commands[revert_i])
+            revert_i -= 1
+        self._shellcode_to_bytes()
+
+    # @param hex_commands: example ['90', '90', '90']
+    def add_postfix(self, hex_commands: list):
+        instr_i = 0
+        while instr_i < len(hex_commands):
+            self._disasm_shellcode.insert(len(self._disasm_shellcode) + 1, hex_commands[instr_i])
+            instr_i += 1
+        self._shellcode_to_bytes()
 
     def compile(self, out_filename):
         with open(out_filename, "wb") as f:
