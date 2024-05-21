@@ -1,0 +1,6 @@
+﻿  main.c
+C:\meterpreter_gaming\vs_c_project\meterpreter_injection\meterpreter_injection\main.c(14,5): error C4235: nonstandard extension used: '__asm' keyword not supported on this architecture
+C:\meterpreter_gaming\vs_c_project\meterpreter_injection\meterpreter_injection\main.c(16,9): error C4235: nonstandard extension used: '__asm' keyword not supported on this architecture
+C:\meterpreter_gaming\vs_c_project\meterpreter_injection\meterpreter_injection\main.c(16,9): error C2065: 'nop': undeclared identifier
+C:\meterpreter_gaming\vs_c_project\meterpreter_injection\meterpreter_injection\main.c(16,9): error C2143: syntax error: missing ';' before '}'
+C:\meterpreter_gaming\vs_c_project\meterpreter_injection\meterpreter_injection\main.c(16,9): error C1003: error count exceeds 100; stopping compilation

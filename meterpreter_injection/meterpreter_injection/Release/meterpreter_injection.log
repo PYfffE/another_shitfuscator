@@ -1,0 +1,7 @@
+﻿  main.c
+  Generating code
+  Finished generating code
+  2 of 2 functions (100.0%) were compiled.
+    0 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
+  meterpreter_injection.vcxproj -> C:\meterpreter_gaming\vs_c_project\meterpreter_injection\Release\meterpreter_injection.exe
