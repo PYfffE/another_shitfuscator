@@ -1,3 +1,6 @@
+from random import randrange
+
+
 class ShellBytes:
     JUMPS_8_TO_32_CONVERT_OPCODES = {'7C': '0F 8C', '75': '0F 85',
                                      '74': '0F 84', '7E': '0F 8E',
@@ -42,6 +45,7 @@ class ShellBytes:
         str_hex = f'{((int_hex + (1 << offset_size)) % (1 << offset_size)):0{int(offset_size / 8) * 2}x}'
 
         # Проверка на переполнение
+        # Возможно работает через попу
         if not (-(2 ** (offset_size - 1))) <= int_hex < (2 ** (offset_size - 1)):
             return None
 
@@ -86,8 +90,15 @@ class ShellBytes:
         int_offset = self.offset_str_hex_to_int(hex_offset)
 
         offset_changes = int_offset + offset_of_offset
-        if not ((- (2 ** (offset_size - 1))) <= offset_changes < (2 ** (offset_size - 1))):
-            return None
+
+        # Проверка на переполнение
+        # Работает через попу
+        if (offset_changes < 0) and (not ((- (2 ** (offset_size - 1))) <= offset_changes)):
+            return False
+        elif (offset_changes > 0) and (not ((2 ** (offset_size - 1)) > offset_changes)):
+            return False
+        # if not ((- (2 ** (offset_size - 1))) <= offset_changes < (2 ** (offset_size - 1))):
+        #     return False
 
         self._disasm_shellcode[jmp_index] = instr_opcode + ' ' + self.offset_int_to_str_hex(offset_changes, offset_size)
         self._shellcode_to_bytes()
@@ -96,7 +107,7 @@ class ShellBytes:
     def get_real_index(self, instr_index):
         real_index = 0
         i = 0
-        while i <= instr_index:
+        while i < instr_index:
             if i in self.changes_buf.keys():
                 real_index += self.changes_buf[i]
             else:
@@ -111,7 +122,7 @@ class ShellBytes:
         instr_i = 0
 
         while instr_i < len(self._disasm_shellcode):
-            hex_offset, offset_size, _ = self._get_offset(self._disasm_shellcode[instr_i])
+            hex_offset, offset_size, hex_opcode = self._get_offset(self._disasm_shellcode[instr_i])
             if offset_size:
                 start_i = instr_i + 1
                 int_offset = self.offset_str_hex_to_int(hex_offset)
@@ -119,6 +130,9 @@ class ShellBytes:
 
                 dest_i = 0
                 if instr_i == 1:
+                    asd = 1
+
+                if hex_opcode == 'E2':
                     asd = 1
 
                 real_start_index = self.get_real_index(start_i)
@@ -133,14 +147,18 @@ class ShellBytes:
                     else:
                         test = self._fix_offset(instr_i, - changed_bytes['bytes_number_difference'])
 
-                    if test is None:
+                    if not test:
                         print('Cannot change offset because overflow offset ' + self._disasm_shellcode[
-                            instr_i] + ' overflow with number ' + str(changed_bytes['bytes_number_difference']))
+                            instr_i] + ' overflow with number ' + str(
+                            changed_bytes['bytes_number_difference']) + '. Skipped')
+
+                        return False
 
                     if instr_i in self.changes_buf.keys():
                         del self.changes_buf[instr_i]
 
             instr_i += 1
+        return True
 
     def _change_instruction(self, instruction_index: int, new_instruction: bytes):
         str_hex = new_instruction.hex()
@@ -149,10 +167,12 @@ class ShellBytes:
         self._shellcode_to_bytes()
         pass
 
-    def new_instruction(self, hex_str: str, after_index: int):
+    def add_instruction(self, hex_str: str, after_index: int):
         self._disasm_shellcode.insert(after_index + 1, hex_str)
         self._shellcode_to_bytes()
-        self._fix_all_offsets({'bytes_number_difference': hex_str, 'index': after_index})
+        test = self._fix_all_offsets({'bytes_number_difference': len(hex_str.split(' ')), 'index': after_index + 1})
+        self.changes_buf = {}
+        return test
 
     def _get_opcode_size(self, str_hex: str):
         return len(str_hex.split(' '))
@@ -163,11 +183,8 @@ class ShellBytes:
         while instr_i < len(self._disasm_shellcode):
             jmp_offset, offset_size, opcode = self._get_offset(self._disasm_shellcode[instr_i])
             if opcode in self.JUMPS_8_TO_32_CONVERT_OPCODES.keys():
-                if opcode == 'E2':
-                    asd = 1
+
                 current_size = self._get_opcode_size(self._disasm_shellcode[instr_i])
-                if jmp_offset == 'F6':
-                    print(123)
                 new_instr = self.JUMPS_8_TO_32_CONVERT_OPCODES[opcode] + ' ' + self.offset_int_to_str_hex(
                     self.offset_str_hex_to_int(jmp_offset), 32)
 
@@ -197,6 +214,47 @@ class ShellBytes:
             self._disasm_shellcode.insert(len(self._disasm_shellcode) + 1, hex_commands[instr_i])
             instr_i += 1
         self._shellcode_to_bytes()
+
+    def add_garbage_instructions_after_each_instruction(self, str_hex_instruction1: str, str_hex_instruction2: str):
+        instr_i = 0
+        while instr_i < len(self._disasm_shellcode):
+            self.add_instruction(str_hex_instruction1, instr_i)
+            instr_i += 1
+            self.add_instruction(str_hex_instruction2, instr_i)
+            # self.add_instruction('EB 04 ' + f' {randrange(17):0{2}x} ' + f' {randrange(17):0{2}x} ' + f' {randrange(17):0{2}x} ' + f' {randrange(17):0{2}x}', instr_i)
+            instr_i += 1
+            instr_i += 1
+
+    # Not Working! :(
+    def add_garbage_instructions_after_each_instruction_with_jmp(self):
+        instr_i = 0
+        while instr_i < len(self._disasm_shellcode):
+            copy_buf = self._disasm_shellcode.copy()
+            copy_i = instr_i
+
+            test1 = True
+            test2 = True
+
+            test1 = self.add_instruction('EB 04', instr_i)
+            if test1:
+                instr_i += 1
+                test2 = self.add_instruction('90 90 90 90', instr_i)
+                if test2:
+                    instr_i += 1
+                    self._disasm_shellcode[instr_i - 1] = 'EB 04'
+            if not (test1 and test2):
+                instr_i = copy_i
+                self._disasm_shellcode = copy_buf.copy()
+
+            instr_i += 1
+
+    def add_nops_after_each_instruction(self):
+        instr_i = 0
+        while instr_i < len(self._disasm_shellcode):
+            self.add_instruction('90', instr_i)
+            # self.add_instruction('EB 04 ' + f' {randrange(17):0{2}x} ' + f' {randrange(17):0{2}x} ' + f' {randrange(17):0{2}x} ' + f' {randrange(17):0{2}x}', instr_i)
+            instr_i += 1
+            instr_i += 1
 
     def compile(self, out_filename):
         with open(out_filename, "wb") as f:
