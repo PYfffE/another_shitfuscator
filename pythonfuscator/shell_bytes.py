@@ -139,8 +139,9 @@ class ShellBytes:
                 real_dest_index = real_start_index + int_offset
                 real_changed_index = self.get_real_index(changed_bytes['index'])
 
+                # один инкремент решил проблему неправильного выравнивания негативного прыжка (real_changed_index + 1)
                 if (real_start_index <= real_changed_index < real_dest_index) or (
-                        real_dest_index <= real_changed_index < real_start_index):
+                        real_dest_index <= (real_changed_index + 1) < real_start_index):
                     test = True
                     if int_offset >= 0:
                         test = self._fix_offset(instr_i, changed_bytes['bytes_number_difference'])
@@ -149,7 +150,7 @@ class ShellBytes:
 
                     if not test:
                         print('Cannot change offset because overflow offset ' + self._disasm_shellcode[
-                            instr_i] + ' overflow with number ' + str(
+                            instr_i] + ' (index ', instr_i, ') overflow with number ' + str(
                             changed_bytes['bytes_number_difference']) + '. Skipped')
 
                         return False
@@ -229,6 +230,10 @@ class ShellBytes:
     def add_garbage_instructions_after_each_instruction_with_jmp(self):
         instr_i = 0
         while instr_i < len(self._disasm_shellcode):
+            if instr_i == 33:
+                asd = 123
+                #instr_i += 1
+                #continue
             copy_buf = self._disasm_shellcode.copy()
             copy_i = instr_i
 
@@ -238,10 +243,12 @@ class ShellBytes:
             test1 = self.add_instruction('EB 04', instr_i)
             if test1:
                 instr_i += 1
-                test2 = self.add_instruction('90 90 90 90', instr_i)
+                test2 = self.add_instruction(f'{randrange(17):0{2}x}' + f' {randrange(17):0{2}x}' + f' {randrange(17):0{2}x}' + f' {randrange(17):0{2}x}', instr_i)
+                # test2 = self.add_instruction('90 90 90 90', instr_i)
                 if test2:
                     instr_i += 1
                     self._disasm_shellcode[instr_i - 1] = 'EB 04'
+
             if not (test1 and test2):
                 instr_i = copy_i
                 self._disasm_shellcode = copy_buf.copy()
@@ -251,9 +258,13 @@ class ShellBytes:
     def add_nops_after_each_instruction(self):
         instr_i = 0
         while instr_i < len(self._disasm_shellcode):
-            self.add_instruction('90', instr_i)
+            bak = self.get_payload()
+            test = self.add_instruction('90', instr_i)
             # self.add_instruction('EB 04 ' + f' {randrange(17):0{2}x} ' + f' {randrange(17):0{2}x} ' + f' {randrange(17):0{2}x} ' + f' {randrange(17):0{2}x}', instr_i)
-            instr_i += 1
+            if test:
+                instr_i += 1
+            else:
+                self._disasm_shellcode = bak.copy()
             instr_i += 1
 
     def compile(self, out_filename):
